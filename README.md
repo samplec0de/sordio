@@ -30,6 +30,10 @@
 
 ## Установка
 
+Ниже — коротко. Если ставите впервые, удобнее
+[пошаговая инструкция со снимками экрана](docs/install.md): там разобраны оба
+разрешения macOS и загрузка расширения.
+
 ```bash
 brew tap samplec0de/sordio https://github.com/samplec0de/sordio.git
 brew trust samplec0de/sordio
