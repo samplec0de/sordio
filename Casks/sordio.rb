@@ -1,7 +1,7 @@
 # Файл создаётся скриптом Scripts/release.sh — править руками бессмысленно.
 cask "sordio" do
-  version "0.4.0"
-  sha256 "f403f7c9d72e325788112c748adf01cbd9778080b0a9aaa3ba0d1f4304d920e1"
+  version "0.5.0"
+  sha256 "529cf2701b224d291dd23651a8fa917673d4383787b94edbade6b3d7ee70fb1e"
 
   url "https://github.com/samplec0de/sordio/releases/download/v#{version}/Sordio-#{version}.dmg"
   name "Sordio"
