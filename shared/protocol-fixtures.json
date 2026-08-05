@@ -1,0 +1,77 @@
+{
+  "note": "Эталонные строки протокола (§5 спецификации). Протокол объявлен дважды — на Swift и на TypeScript, — и половины тестируются порознь, так что расхождение между ними не поймал бы ни один тест. Обе стороны читают этот файл: app/Tests/SordioCoreTests/ProtocolMirrorTests.swift и extension/tests/protocolMirror.test.ts. Ключи в json отсортированы: именно так их пишет JSONSerialization с .sortedKeys, и Swift сравнивает свою кодировку с этой строкой посимвольно.",
+  "version": 1,
+  "extensionToApp": [
+    {
+      "name": "hello без секрета",
+      "json": "{\"extensionId\":\"abcdefghijklmnopabcdefghijklmnop\",\"type\":\"hello\",\"v\":1}",
+      "message": { "type": "hello", "extensionId": "abcdefghijklmnopabcdefghijklmnop" }
+    },
+    {
+      "name": "hello с секретом",
+      "json": "{\"extensionId\":\"abcdefghijklmnopabcdefghijklmnop\",\"secret\":\"s3cr3t\",\"type\":\"hello\",\"v\":1}",
+      "message": {
+        "type": "hello",
+        "extensionId": "abcdefghijklmnopabcdefghijklmnop",
+        "secret": "s3cr3t"
+      }
+    },
+    {
+      "name": "состояние: звонок, микрофон открыт",
+      "json": "{\"context\":\"in-call\",\"muted\":false,\"type\":\"state\",\"v\":1}",
+      "message": { "type": "state", "context": "in-call", "muted": false }
+    },
+    {
+      "name": "состояние: предзвонок, микрофон выключен",
+      "json": "{\"context\":\"pre-call\",\"muted\":true,\"type\":\"state\",\"v\":1}",
+      "message": { "type": "state", "context": "pre-call", "muted": true }
+    },
+    {
+      "name": "состояние: звонка нет, muted отсутствует",
+      "json": "{\"context\":\"no-call\",\"type\":\"state\",\"v\":1}",
+      "message": { "type": "state", "context": "no-call" }
+    },
+    {
+      "name": "состояние: кнопка не найдена",
+      "json": "{\"context\":\"button-not-found\",\"type\":\"state\",\"v\":1}",
+      "message": { "type": "state", "context": "button-not-found" }
+    },
+    {
+      "name": "уровень: середина шкалы",
+      "json": "{\"level\":0.42,\"type\":\"level\",\"v\":1}",
+      "message": { "type": "level", "level": 0.42 }
+    },
+    {
+      "name": "уровень: тишина, целое число без дробной части",
+      "json": "{\"level\":0,\"type\":\"level\",\"v\":1}",
+      "message": { "type": "level", "level": 0 }
+    },
+    {
+      "name": "уровень: максимум",
+      "json": "{\"level\":1,\"type\":\"level\",\"v\":1}",
+      "message": { "type": "level", "level": 1 }
+    }
+  ],
+  "appToExtension": [
+    {
+      "name": "welcome",
+      "json": "{\"type\":\"welcome\",\"v\":1}",
+      "message": { "type": "welcome" }
+    },
+    {
+      "name": "paired с секретом",
+      "json": "{\"secret\":\"s3cr3t\",\"type\":\"paired\",\"v\":1}",
+      "message": { "type": "paired", "secret": "s3cr3t" }
+    },
+    {
+      "name": "команда: выключить микрофон",
+      "json": "{\"action\":\"setMuted\",\"id\":\"c7\",\"muted\":true,\"type\":\"command\",\"v\":1}",
+      "message": { "type": "command", "action": "setMuted", "id": "c7", "muted": true }
+    },
+    {
+      "name": "команда: включить микрофон",
+      "json": "{\"action\":\"setMuted\",\"id\":\"c8\",\"muted\":false,\"type\":\"command\",\"v\":1}",
+      "message": { "type": "command", "action": "setMuted", "id": "c8", "muted": false }
+    }
+  ]
+}

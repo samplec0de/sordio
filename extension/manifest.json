@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Sordio",
+  "version": "0.3.0",
+  "description": "Неофициальное расширение. Управление микрофоном SaluteJazz глобальным хоткеем и плашкой поверх окон.",
+  "minimum_chrome_version": "120",
+  "permissions": [
+    "alarms",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://salutejazz.ru/*"
+  ],
+  "background": {
+    "service_worker": "worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://salutejazz.ru/*"
+      ],
+      "js": [
+        "levelMain.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "https://salutejazz.ru/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}
