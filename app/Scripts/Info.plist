@@ -6,6 +6,8 @@
 	<string>Sordio</string>
 	<key>CFBundleExecutable</key>
 	<string>Sordio</string>
+	<key>CFBundleIconFile</key>
+	<string>Sordio</string>
 	<key>CFBundleIdentifier</key>
 	<string>ru.sordio.app</string>
 	<key>CFBundleName</key>

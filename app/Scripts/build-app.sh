@@ -23,6 +23,9 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Sordio"
 cp Scripts/Info.plist "$APP/Contents/Info.plist"
+# Имя файла обязано совпадать с CFBundleIconFile в Info.plist, иначе Finder
+# молча покажет типовую иконку и никак об этом не сообщит.
+cp Scripts/Sordio.icns "$APP/Contents/Resources/Sordio.icns"
 
 if [ -n "$VERSION" ]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
