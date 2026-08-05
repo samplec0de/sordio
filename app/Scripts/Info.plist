@@ -2,23 +2,23 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>
-    <string>Sordio</string>
-    <key>CFBundleDisplayName</key>
-    <string>Sordio</string>
-    <key>CFBundleIdentifier</key>
-    <string>ru.sordio.app</string>
-    <key>CFBundleExecutable</key>
-    <string>Sordio</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>0.3.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
-    <key>LSUIElement</key>
-    <true/>
+	<key>CFBundleDisplayName</key>
+	<string>Sordio</string>
+	<key>CFBundleExecutable</key>
+	<string>Sordio</string>
+	<key>CFBundleIdentifier</key>
+	<string>ru.sordio.app</string>
+	<key>CFBundleName</key>
+	<string>Sordio</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.4.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
 </dict>
 </plist>
