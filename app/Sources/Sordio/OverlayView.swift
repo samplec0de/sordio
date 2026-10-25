@@ -11,7 +11,6 @@ final class OverlayModel: ObservableObject {
 
 struct OverlayView: View {
     @ObservedObject var model: OverlayModel
-    var onToggle: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
@@ -43,7 +42,6 @@ struct OverlayView: View {
         .animation(.easeInOut(duration: 0.15), value: model.isPending)
         .animation(.easeInOut(duration: 0.15), value: model.flash)
         .contentShape(Capsule())
-        .onTapGesture(perform: onToggle)
         .help(caption)
     }
 
