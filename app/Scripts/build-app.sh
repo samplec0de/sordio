@@ -46,20 +46,21 @@ else
 fi
 
 IDENTITY="Sordio Dev"
-# Прав приложению не нужно: микрофон оно не открывает — уровень считает
-# расширение по клону дорожки страницы.
+# Микрофон приложение не открывает — уровень считает расширение по клону
+# дорожки страницы. Единственное право — Bluetooth, для связи с Flipper Zero:
+# под hardened runtime без него macOS отказывает в доступе молча.
 #
 # Подписывать каждую сборку одним и тем же сертификатом обязательно: TCC
 # привязывает выданные разрешения к подписи, и смена сертификата сбросит их
 # и здесь, и у всех, кому приложение уже поставлено.
 if security find-identity -v -p codesigning | grep -q "$IDENTITY"; then
     echo "→ подпись сертификатом «${IDENTITY}»"
-    codesign --force --deep --sign "$IDENTITY" --options runtime "$APP"
+    codesign --force --deep --sign "$IDENTITY" --options runtime --entitlements Scripts/Sordio.entitlements "$APP"
 else
     echo "⚠️  Сертификат «${IDENTITY}» не найден — подпись ad-hoc."
     echo "   Разрешение Input Monitoring будет слетать после каждой пересборки."
     echo "   См. Scripts/SIGNING.md"
-    codesign --force --deep --sign - --options runtime "$APP"
+    codesign --force --deep --sign - --options runtime --entitlements Scripts/Sordio.entitlements "$APP"
 fi
 
 codesign --verify --strict "$APP"
