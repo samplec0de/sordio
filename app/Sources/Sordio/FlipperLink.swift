@@ -40,7 +40,11 @@ final class FlipperLink: NSObject {
     var onPeripheralKnown: ((UUID) -> Void)?
 
     private(set) var status: Status = .disabled {
-        didSet { if status != oldValue { onStatus?(status) } }
+        didSet {
+            guard status != oldValue else { return }
+            NSLog("Sordio: Flipper — состояние \(status)")
+            onStatus?(status)
+        }
     }
 
     private var central: CBCentralManager?
@@ -125,8 +129,10 @@ final class FlipperLink: NSObject {
 
         if let id = savedIdentifier,
            let known = central.retrievePeripherals(withIdentifiers: [id]).first {
+            NSLog("Sordio: Flipper — подключаюсь к запомненному \(id)")
             connect(known)
         } else {
+            NSLog("Sordio: Flipper — запомненного нет, ищу по имени")
             central.scanForPeripherals(withServices: nil, options: nil)
         }
     }
@@ -190,6 +196,7 @@ extension FlipperLink: CBCentralManagerDelegate {
                         advertisementData: [String: Any], rssi RSSI: NSNumber) {
         let name = (advertisementData[CBAdvertisementDataLocalNameKey] as? String) ?? found.name ?? ""
         guard name.hasPrefix("Flipper"), peripheral == nil else { return }
+        NSLog("Sordio: Flipper — нашёл «\(name)»")
         central.stopScan()
         status = .connecting
         connect(found)
@@ -203,6 +210,7 @@ extension FlipperLink: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didFailToConnect failed: CBPeripheral,
                         error: Error?) {
         guard failed === peripheral else { return }
+        NSLog("Sordio: Flipper — не удалось подключиться: \(String(describing: error))")
         linkLost()
     }
 
@@ -211,6 +219,7 @@ extension FlipperLink: CBCentralManagerDelegate {
         // Разрыв с устройством, которое мы уже сами отпустили (`forget`,
         // `stop`), — не повод подключаться заново.
         guard gone === peripheral else { return }
+        NSLog("Sordio: Flipper — разрыв: \(String(describing: error))")
         // Отказ от сопряжения тоже заканчивается разрывом, но повторять его
         // нельзя — иначе окно с PIN будет всплывать снова и снова.
         if status == .pairingFailed {
@@ -227,6 +236,7 @@ extension FlipperLink: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard let service = peripheral.services?.first(where: { $0.uuid == Self.serviceUUID }) else {
             // Это Flipper без нужного сервиса — не наш случай, ждём другого.
+            NSLog("Sordio: Flipper — нужного сервиса нет: \(String(describing: error))")
             central?.cancelPeripheralConnection(peripheral)
             return
         }
@@ -253,6 +263,7 @@ extension FlipperLink: CBPeripheralDelegate {
                     didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
         guard characteristic.uuid == Self.eventsUUID else { return }
         guard error == nil, characteristic.isNotifying, stateCharacteristic != nil else {
+            NSLog("Sordio: Flipper — подписка не удалась: \(String(describing: error))")
             status = .pairingFailed
             central?.cancelPeripheralConnection(peripheral)
             return

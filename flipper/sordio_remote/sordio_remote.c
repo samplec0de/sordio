@@ -81,13 +81,19 @@ typedef struct {
     /* «Нажата» уже ушло на Mac — значит, на отпускании нужно отправить «отпущена». */
     bool down_sent;
     uint32_t press_tick;
+    /* Предыдущее нажатие было коротким тычком, которому нечего было отправлять;
+     * если следом придёт второе, это двойное нажатие. */
+    bool tap_pending;
+    uint32_t tap_release_tick;
     uint32_t rx_count;
 } App;
 
-/* Включить микрофон можно только удержанием: случайный тычок в кармане
- * ничего не отправляет. Когда микрофон уже включён, кнопка работает сразу —
- * иначе «выключить» пришлось бы делать с задержкой. */
+/* Включить микрофон можно только удержанием или двойным нажатием: одиночный
+ * случайный тычок в кармане ничего не отправляет. Когда микрофон уже включён,
+ * кнопка работает сразу — иначе «выключить» пришлось бы делать с задержкой. */
 #define HOLD_TO_UNMUTE_MS 600
+/* Сколько после отпускания первого тычка ждём второго нажатия. */
+#define DOUBLE_TAP_MS 400
 
 static bool needs_hold(const App* app) {
     return app->mic_state != SORDIO_STATE_UNMUTED;
@@ -150,7 +156,7 @@ static void draw_callback(Canvas* canvas, void* context) {
             56,
             AlignCenter,
             AlignCenter,
-            needs_hold(app) ? "Hold OK: unmute" : "OK: mute / hold: talk");
+            needs_hold(app) ? "Hold or 2x OK: unmute" : "OK: mute / hold: talk");
     }
 
     furi_mutex_release(app->mutex);
@@ -264,13 +270,24 @@ int32_t sordio_remote_app(void* p) {
                         app->down_sent = false;
                         app->press_tick = furi_get_tick();
                         furi_mutex_release(app->mutex);
-                        if(!needs_hold(app)) {
+
+                        bool double_tap = app->tap_pending &&
+                                          app->press_tick - app->tap_release_tick <= DOUBLE_TAP_MS;
+                        app->tap_pending = false;
+                        if(!needs_hold(app) ||
+                           (double_tap && app->bt_status == BtStatusConnected)) {
                             send_event(app, SORDIO_EVT_DOWN);
                             app->down_sent = true;
                         }
                     } else if(event.input.type == InputTypeRelease && app->ok_down) {
-                        /* Не дождались порога — Mac ничего не узнает о нажатии. */
-                        if(app->down_sent) send_event(app, SORDIO_EVT_UP);
+                        if(app->down_sent) {
+                            send_event(app, SORDIO_EVT_UP);
+                        } else {
+                            /* Не дождались порога — Mac ничего не узнает о нажатии,
+                             * но запомним тычок: вдруг за ним придёт второй. */
+                            app->tap_pending = true;
+                            app->tap_release_tick = furi_get_tick();
+                        }
                         furi_mutex_acquire(app->mutex, FuriWaitForever);
                         app->ok_down = false;
                         app->down_sent = false;
@@ -290,6 +307,7 @@ int32_t sordio_remote_app(void* p) {
                     app->mic_state = 0;
                     /* Связи нет: «отпущена» отправлять некуда. */
                     app->down_sent = false;
+                    app->tap_pending = false;
                 }
                 furi_mutex_release(app->mutex);
                 break;
