@@ -8,6 +8,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var bridge: BridgeServer!
     private var hotkey: HotkeyMonitor!
     private var interpreter = PressInterpreter(holdThreshold: Preferences.shared.holdThreshold)
+    private var flipper: FlipperLink!
+    /// Идёт нажатие, пришедшее именно с Flipper'а: только его обрыв связи
+    /// должен прерывать удержание, а не, скажем, хоткей, зажатый параллельно.
+    private var flipperPressing = false
     private var menuBar: MenuBarController!
     private var overlay: OverlayPanel!
     private var timer: Timer?
@@ -54,7 +58,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.overlayModel.state = state
             self.overlayModel.isPending = pending
             self.syncOverlay()
+            self.flipper.show(state)
         }
+
+        startFlipper()
 
         startBridge()
         startHotkey()
@@ -82,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         hotkey?.stop()
+        flipper?.stop()
         bridge?.stop()
         timer?.invalidate()
     }
@@ -227,6 +235,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             NSLog("Sordio: не удалось занять порт — \(error)")
         }
+    }
+
+    // MARK: - Flipper Zero
+
+    private func startFlipper() {
+        flipper = FlipperLink(savedIdentifier: Preferences.shared.flipperIdentifier)
+        flipper.show(store.overlay)
+
+        flipper.onStatus = { [weak self] status in self?.menuBar.render(flipper: status) }
+        flipper.onPeripheralKnown = { Preferences.shared.flipperIdentifier = $0 }
+        flipper.onEvent = { [weak self] event in
+            guard let self else { return }
+            switch event {
+            case .down:
+                // Хоткей уже зажат — это его удержание, чужое «нажата» его не отнимает.
+                guard !self.interpreter.isPressed else { return }
+                self.flipperPressing = true
+                self.handleKeyDown()
+            case .up:
+                guard self.flipperPressing else { return }
+                self.flipperPressing = false
+                self.handleKeyUp()
+            }
+        }
+        flipper.onDisconnect = { [weak self] in
+            guard let self, self.flipperPressing else { return }
+            self.flipperPressing = false
+            // То же, что при обрыве моста: «отпущена» уже не придёт, и без этого
+            // микрофон остался бы открытым навсегда.
+            self.deferredOutcome.store(self.interpreter.cancel())
+            if self.bridge.isConnected { self.apply(self.deferredOutcome.take()) }
+        }
+
+        menuBar.onToggleFlipper = { [weak self] in
+            guard let self else { return }
+            let enabled = !Preferences.shared.flipperEnabled
+            Preferences.shared.flipperEnabled = enabled
+            if enabled { self.flipper.start() } else { self.flipper.stop() }
+        }
+        menuBar.onForgetFlipper = { [weak self] in
+            Preferences.shared.flipperIdentifier = nil
+            self?.flipper.forget()
+        }
+        menuBar.onOpenBluetoothSettings = { FlipperLink.openBluetoothSettings() }
+
+        if Preferences.shared.flipperEnabled { flipper.start() }
     }
 
     // MARK: - хоткей

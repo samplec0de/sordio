@@ -1,0 +1,11 @@
+App(
+    appid="sordio_remote",
+    name="Sordio Remote",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="sordio_remote_app",
+    requires=["gui", "bt", "notification"],
+    stack_size=2 * 1024,
+    fap_category="Bluetooth",
+    fap_version="0.1",
+    fap_description="Пульт микрофона для Sordio: кнопка, статус и вибрация по Bluetooth",
+)

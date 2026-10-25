@@ -18,6 +18,8 @@ final class Preferences {
         static let warnSpeakingMuted = "warnWhenSpeakingMuted"
         static let pairingSecret = "pairingSecret"
         static let pairedExtensionId = "pairedExtensionId"
+        static let flipperEnabled = "flipperEnabled"
+        static let flipperIdentifier = "flipperIdentifier"
     }
 
     private init() {
@@ -78,6 +80,19 @@ final class Preferences {
     var pairedExtensionId: String? {
         get { defaults.string(forKey: Key.pairedExtensionId) }
         set { defaults.set(newValue, forKey: Key.pairedExtensionId) }
+    }
+
+    /// Связь с Flipper Zero. По умолчанию выключена: включение вызывает
+    /// системный запрос на Bluetooth, а он нужен не всем.
+    var flipperEnabled: Bool {
+        get { defaults.bool(forKey: Key.flipperEnabled) }
+        set { defaults.set(newValue, forKey: Key.flipperEnabled) }
+    }
+
+    /// Идентификатор Flipper'а, с которым уже было сопряжение.
+    var flipperIdentifier: UUID? {
+        get { defaults.string(forKey: Key.flipperIdentifier).flatMap(UUID.init(uuidString:)) }
+        set { defaults.set(newValue?.uuidString, forKey: Key.flipperIdentifier) }
     }
 
     var launchAtLogin: Bool {

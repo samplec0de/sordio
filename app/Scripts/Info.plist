@@ -18,6 +18,8 @@
 	<string>0.5.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Sordio связывается с Flipper Zero, чтобы вы могли включать и выключать микрофон с него.</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>LSUIElement</key>
