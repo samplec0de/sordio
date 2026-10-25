@@ -1,5 +1,34 @@
 import AppKit
+import SordioCore
 import SwiftUI
+
+/// SwiftUI-содержимое перехватывает мышь, и `isMovableByWindowBackground`
+/// на нём не срабатывает: плашку нельзя было сдвинуть. Поэтому перетаскивание
+/// сделано явно, а клик без движения — это нажатие на плашку.
+private final class OverlayHostingView: NSHostingView<OverlayView> {
+    var onClick: (() -> Void)?
+    private var drag = DragTracker()
+
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    /// Плашка не активирует приложение, и первый клик по ней не должен
+    /// тратиться на «захват» окна.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        guard let window else { return }
+        drag.begin(mouse: NSEvent.mouseLocation, windowOrigin: window.frame.origin)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let window, let origin = drag.move(to: NSEvent.mouseLocation) else { return }
+        window.setFrameOrigin(origin)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if drag.end() { onClick?() }
+    }
+}
 
 /// Плашка поверх всех окон, включая полноэкранные приложения и все Spaces.
 final class OverlayPanel {
@@ -12,7 +41,8 @@ final class OverlayPanel {
     init(model: OverlayModel, onToggle: @escaping () -> Void) {
         self.model = model
 
-        let hosting = NSHostingView(rootView: OverlayView(model: model, onToggle: onToggle))
+        let hosting = OverlayHostingView(rootView: OverlayView(model: model))
+        hosting.onClick = onToggle
         hosting.frame = NSRect(x: 0, y: 0, width: 120, height: 34)
 
         panel = NSPanel(contentRect: hosting.frame,
@@ -23,7 +53,7 @@ final class OverlayPanel {
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
-        panel.isMovableByWindowBackground = true
+        panel.isMovableByWindowBackground = false
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
