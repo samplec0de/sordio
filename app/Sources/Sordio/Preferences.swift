@@ -20,6 +20,7 @@ final class Preferences {
         static let pairedExtensionId = "pairedExtensionId"
         static let flipperEnabled = "flipperEnabled"
         static let flipperIdentifier = "flipperIdentifier"
+        static let flipperOnlyDuringCalls = "flipperOnlyDuringCalls"
     }
 
     private init() {
@@ -87,6 +88,13 @@ final class Preferences {
     var flipperEnabled: Bool {
         get { defaults.bool(forKey: Key.flipperEnabled) }
         set { defaults.set(newValue, forKey: Key.flipperEnabled) }
+    }
+
+    /// Держать Flipper только пока в браузере идёт звонок. Нужно, когда у
+    /// человека несколько компьютеров с Sordio: Flipper держит одно соединение.
+    var flipperOnlyDuringCalls: Bool {
+        get { defaults.bool(forKey: Key.flipperOnlyDuringCalls) }
+        set { defaults.set(newValue, forKey: Key.flipperOnlyDuringCalls) }
     }
 
     /// Идентификатор Flipper'а, с которым уже было сопряжение.
