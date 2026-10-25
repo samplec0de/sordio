@@ -5,6 +5,10 @@
 #include <bt/bt_service/bt.h>
 #include <profiles/serial_profile.h>
 
+#include <furi_hal_power.h>
+
+#include "font.h"
+#include "icons.h"
 #include "protocol.h"
 
 #define TAG         "SordioRemote"
@@ -77,6 +81,7 @@ typedef struct {
     /* Ниже — под mutex. */
     BtStatus bt_status;
     uint8_t mic_state; /* 0 — ещё ничего не пришло */
+    uint32_t state_tick; /* когда состояние сменилось — для анимации волн */
     bool ok_down;
     /* «Нажата» уже ушло на Mac — значит, на отпускании нужно отправить «отпущена». */
     bool down_sent;
@@ -94,70 +99,183 @@ typedef struct {
 #define HOLD_TO_UNMUTE_MS 600
 /* Сколько после отпускания первого тычка ждём второго нажатия. */
 #define DOUBLE_TAP_MS 400
+/* Кадр анимации «ищу Mac». */
+#define WAIT_FRAME_MS 250
 
 static bool needs_hold(const App* app) {
     return app->mic_state != SORDIO_STATE_UNMUTED;
 }
 
-static const char* mic_state_text(uint8_t state) {
-    switch(state) {
-    case SORDIO_STATE_UNMUTED:
-        return "MIC ON";
-    case SORDIO_STATE_MUTED:
-        return "MIC OFF";
-    case SORDIO_STATE_NO_CALL:
-        return "NO CALL";
-    case SORDIO_STATE_NO_BRIDGE:
-        return "NO BROWSER";
-    case SORDIO_STATE_BUTTON_NOT_FOUND:
-        return "NO MIC BTN";
-    default:
-        return "WAITING";
+/* Штатные шрифты Flipper'а рисуют только ASCII, поэтому текст — своим
+ * растровым шрифтом (font.h, см. tools/gen_font.py). Строки — UTF-8. */
+static uint16_t next_code(const char** s) {
+    const uint8_t* p = (const uint8_t*)*s;
+    if(p[0] < 0x80) {
+        *s += 1;
+        return p[0];
+    }
+    if((p[0] & 0xE0) == 0xC0 && (p[1] & 0xC0) == 0x80) {
+        *s += 2;
+        return (uint16_t)(((p[0] & 0x1F) << 6) | (p[1] & 0x3F));
+    }
+    *s += 1;
+    return '?';
+}
+
+static const uint8_t* glyph_bits(const BitmapFont* font, uint16_t code) {
+    int lo = 0, hi = (int)font->count - 1;
+    while(lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if(font->codes[mid] == code) return &font->bits[mid * font->height];
+        if(font->codes[mid] < code)
+            lo = mid + 1;
+        else
+            hi = mid - 1;
+    }
+    return NULL;
+}
+
+static int text_width(const BitmapFont* font, const char* s) {
+    int n = 0;
+    while(*s) {
+        next_code(&s);
+        n++;
+    }
+    return n * font->advance;
+}
+
+/* y — верх ячейки шрифта. Рисует текущим цветом холста. */
+static void draw_text(Canvas* canvas, const BitmapFont* font, int x, int y, const char* s) {
+    while(*s) {
+        const uint8_t* bits = glyph_bits(font, next_code(&s));
+        if(bits) canvas_draw_xbm(canvas, x, y, font->width, font->height, bits);
+        x += font->advance;
     }
 }
 
-static const char* bt_status_text(BtStatus status) {
-    switch(status) {
-    case BtStatusConnected:
-        return "Mac connected";
-    case BtStatusAdvertising:
-        return "Waiting for Mac...";
-    case BtStatusOff:
-        return "BT off";
-    default:
-        return "BT unavailable";
+static void draw_text_centered(
+    Canvas* canvas,
+    const BitmapFont* font,
+    int center_x,
+    int y,
+    const char* s) {
+    draw_text(canvas, font, center_x - text_width(font, s) / 2, y, s);
+}
+
+typedef struct {
+    const uint8_t* icon;
+    const char* title;
+    const char* line1;
+    const char* line2;
+} StateView;
+
+/* Волны вокруг включённого микрофона разбегаются за ANIM_MS после включения. */
+#define ANIM_MS       360
+#define WAVE_FRAME_MS 120
+
+static StateView state_view(const App* app) {
+    switch(app->mic_state) {
+    case SORDIO_STATE_UNMUTED: {
+        uint32_t age = furi_get_tick() - app->state_tick;
+        uint32_t frame = age / WAVE_FRAME_MS;
+        if(frame > 2) frame = 2;
+        const uint8_t* icons[] = {icon_mic_on_0, icon_mic_on_1, icon_mic_on_2};
+        return (StateView){icons[frame], "Включён", "Вас", "слышно"};
     }
+    case SORDIO_STATE_MUTED:
+        return (StateView){icon_mic_off, "Выключен", "Вас не", "слышно"};
+    case SORDIO_STATE_NO_CALL:
+        return (StateView){icon_mic_unknown, "Нет звонка", "Войдите", "в звонок"};
+    case SORDIO_STATE_NO_BRIDGE:
+        return (StateView){icon_mic_unknown, "Нет браузера", "Проверьте", "расширение"};
+    case SORDIO_STATE_BUTTON_NOT_FOUND:
+        return (StateView){icon_mic_unknown, "Нет кнопки", "Обновите", "страницу"};
+    default:
+        return (StateView){icon_mic_unknown, "Подключён", "Ждём", "состояние"};
+    }
+}
+
+static void draw_battery(Canvas* canvas, int x, int y) {
+    uint8_t pct = furi_hal_power_get_pct();
+    canvas_draw_frame(canvas, x, y, 17, 8);
+    canvas_draw_box(canvas, x + 17, y + 2, 2, 4); /* контакт */
+    canvas_draw_box(canvas, x + 2, y + 2, (uint8_t)(13 * pct / 100), 4);
+}
+
+static void draw_top_bar(Canvas* canvas, const App* app) {
+    bool connected = app->bt_status == BtStatusConnected;
+    canvas_draw_xbm(canvas, 2, 1, ICON_BLUETOOTH_W, ICON_BLUETOOTH_H, icon_bluetooth);
+    draw_text(canvas, &font_small, 13, 2, connected ? "Mac подключён" : "Ждём Mac");
+    draw_battery(canvas, 108, 1);
+}
+
+/* Расходящиеся круги вокруг значка Bluetooth: «ищу Mac». */
+static void draw_waiting(Canvas* canvas) {
+    const int cx = 64, cy = 32;
+    uint32_t frame = (furi_get_tick() / WAIT_FRAME_MS) % 4;
+    for(uint32_t i = 0; i < 3; i++) {
+        uint32_t r = 8 + ((frame + i) % 4) * 6;
+        if(r < 28) canvas_draw_circle(canvas, cx, cy, r);
+    }
+    /* Белая «подложка» под значком, чтобы круги его не пересекали. */
+    canvas_set_color(canvas, ColorWhite);
+    canvas_draw_box(canvas, cx - 7, cy - 9, 14, 18);
+    canvas_set_color(canvas, ColorBlack);
+    canvas_draw_xbm(
+        canvas,
+        cx - ICON_BLUETOOTH_W / 2,
+        cy - ICON_BLUETOOTH_H / 2,
+        ICON_BLUETOOTH_W,
+        ICON_BLUETOOTH_H,
+        icon_bluetooth);
+}
+
+static void draw_bottom_bar(Canvas* canvas, const App* app, bool connected) {
+    canvas_draw_box(canvas, 0, 53, 128, 11);
+    canvas_set_color(canvas, ColorWhite);
+
+    if(connected && app->ok_down && !app->down_sent) {
+        /* Удержание: полоса заполняется до порога. */
+        uint32_t held = furi_get_tick() - app->press_tick;
+        if(held > HOLD_TO_UNMUTE_MS) held = HOLD_TO_UNMUTE_MS;
+        canvas_draw_frame(canvas, 14, 55, 100, 7);
+        canvas_draw_box(canvas, 14, 55, (uint8_t)(100 * held / HOLD_TO_UNMUTE_MS), 7);
+    } else {
+        const char* hint = "Выход: держать Back";
+        if(connected) {
+            if(app->ok_down)
+                hint = "OK удерживается";
+            else if(app->mic_state == SORDIO_STATE_UNMUTED)
+                hint = "OK: выкл  Держать: речь";
+            else if(app->mic_state == SORDIO_STATE_MUTED)
+                hint = "Держать или 2xOK: вкл";
+            else if(app->mic_state != 0)
+                hint = "Держать или 2xOK";
+        }
+        draw_text_centered(canvas, &font_small, 64, 55, hint);
+    }
+    canvas_set_color(canvas, ColorBlack);
 }
 
 static void draw_callback(Canvas* canvas, void* context) {
     App* app = context;
     furi_mutex_acquire(app->mutex, FuriWaitForever);
 
+    bool connected = app->bt_status == BtStatusConnected;
     canvas_clear(canvas);
-    canvas_set_font(canvas, FontSecondary);
-    canvas_draw_str_aligned(canvas, 64, 6, AlignCenter, AlignCenter, bt_status_text(app->bt_status));
+    canvas_set_color(canvas, ColorBlack);
+    draw_top_bar(canvas, app);
 
-    canvas_set_font(canvas, FontBigNumbers);
-    canvas_draw_str_aligned(
-        canvas, 64, 32, AlignCenter, AlignCenter, mic_state_text(app->mic_state));
-
-    canvas_set_font(canvas, FontSecondary);
-    if(app->ok_down && !app->down_sent) {
-        uint32_t held = furi_get_tick() - app->press_tick;
-        if(held > HOLD_TO_UNMUTE_MS) held = HOLD_TO_UNMUTE_MS;
-        canvas_draw_frame(canvas, 14, 50, 100, 8);
-        canvas_draw_box(canvas, 14, 50, (uint8_t)(100 * held / HOLD_TO_UNMUTE_MS), 8);
-    } else if(app->ok_down) {
-        canvas_draw_str_aligned(canvas, 64, 56, AlignCenter, AlignCenter, "OK held");
+    if(connected) {
+        StateView view = state_view(app);
+        canvas_draw_xbm(canvas, 2, 17, ICON_MIC_ON_0_W, ICON_MIC_ON_0_H, view.icon);
+        draw_text(canvas, &font_big, 54, 15, view.title);
+        draw_text(canvas, &font_mid, 54, 30, view.line1);
+        draw_text(canvas, &font_mid, 54, 41, view.line2);
     } else {
-        canvas_draw_str_aligned(
-            canvas,
-            64,
-            56,
-            AlignCenter,
-            AlignCenter,
-            needs_hold(app) ? "Hold or 2x OK: unmute" : "OK: mute / hold: talk");
+        draw_waiting(canvas);
     }
+    draw_bottom_bar(canvas, app, connected);
 
     furi_mutex_release(app->mutex);
 }
@@ -218,6 +336,7 @@ static void handle_rx(App* app, uint8_t byte) {
     }
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     bool changed = app->mic_state != byte;
+    if(changed) app->state_tick = furi_get_tick();
     app->mic_state = byte;
     app->rx_count++;
     furi_mutex_release(app->mutex);
@@ -257,8 +376,17 @@ int32_t sordio_remote_app(void* p) {
         /* Пока идёт удержание, просыпаемся часто: нужно и дождаться порога, и
          * перерисовывать полосу прогресса. В остальное время спим до события. */
         bool arming = app->ok_down && !app->down_sent;
-        FuriStatus status =
-            furi_message_queue_get(app->queue, &event, arming ? 30 : FuriWaitForever);
+        bool connected = app->bt_status == BtStatusConnected;
+        bool waves = connected && app->mic_state == SORDIO_STATE_UNMUTED &&
+                     furi_get_tick() - app->state_tick < ANIM_MS;
+        uint32_t timeout = FuriWaitForever;
+        if(arming)
+            timeout = 30;
+        else if(waves)
+            timeout = 40;
+        else if(!connected)
+            timeout = WAIT_FRAME_MS;
+        FuriStatus status = furi_message_queue_get(app->queue, &event, timeout);
 
         if(status == FuriStatusOk) {
             switch(event.type) {
