@@ -16,6 +16,8 @@ final class FlipperLink: NSObject {
         case bluetoothOff
         case unauthorized
         case unsupported
+        /// Связь включена, но Flipper отпущен: подключимся, когда начнётся звонок.
+        case waitingForCall
         case searching
         case connecting
         case connected
@@ -51,6 +53,9 @@ final class FlipperLink: NSObject {
     private var peripheral: CBPeripheral?
     private var stateCharacteristic: CBCharacteristic?
     private var savedIdentifier: UUID?
+    /// Нужно ли сейчас держать связь. `false` — Flipper отпущен, чтобы им мог
+    /// воспользоваться другой компьютер (см. `FlipperGate`).
+    private var isActive = true
 
     /// Что показываем на Flipper'е сейчас и что ему уже отправлено: повтор того
     /// же байта не нужен, а после переподключения — нужен, Flipper его забыл.
@@ -81,6 +86,24 @@ final class FlipperLink: NSObject {
         resetConnection()
         self.central = nil
         status = .disabled
+        if wasConnected { onDisconnect?() }
+    }
+
+    /// Взять или отпустить Flipper, не выключая саму связь: разрешение на
+    /// Bluetooth и запомненное устройство остаются.
+    func setActive(_ active: Bool) {
+        guard active != isActive else { return }
+        isActive = active
+        guard let central else { return }
+        if active {
+            if central.state == .poweredOn { begin() }
+            return
+        }
+        central.stopScan()
+        if let peripheral { central.cancelPeripheralConnection(peripheral) }
+        let wasConnected = status == .connected
+        resetConnection()
+        if central.state == .poweredOn { status = .waitingForCall }
         if wasConnected { onDisconnect?() }
     }
 
@@ -125,6 +148,10 @@ final class FlipperLink: NSObject {
     /// поиск по имени.
     private func begin() {
         guard let central, central.state == .poweredOn else { return }
+        guard isActive else {
+            status = .waitingForCall
+            return
+        }
         status = .searching
 
         if let id = savedIdentifier,

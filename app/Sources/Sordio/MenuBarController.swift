@@ -9,10 +9,12 @@ final class MenuBarController {
 
     private let flipperStatusItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let flipperItem = NSMenuItem(title: "Flipper Zero", action: nil, keyEquivalent: "")
+    private let flipperCallOnlyItem = NSMenuItem(title: "Flipper только во время звонка", action: nil, keyEquivalent: "")
     private let flipperForgetItem = NSMenuItem(title: "Забыть Flipper", action: nil, keyEquivalent: "")
 
     var onToggleOverlay: (() -> Void)?
     var onToggleFlipper: (() -> Void)?
+    var onToggleFlipperCallOnly: (() -> Void)?
     var onForgetFlipper: (() -> Void)?
     var onOpenBluetoothSettings: (() -> Void)?
     var onOpenPermissions: (() -> Void)?
@@ -42,6 +44,11 @@ final class MenuBarController {
         // Строка состояния видна, только пока связь включена.
         flipperStatusItem.isHidden = true
         menu.addItem(flipperStatusItem)
+
+        flipperCallOnlyItem.action = #selector(toggleFlipperCallOnly)
+        flipperCallOnlyItem.target = self
+        flipperCallOnlyItem.isHidden = true
+        menu.addItem(flipperCallOnlyItem)
 
         flipperForgetItem.action = #selector(forgetFlipper)
         flipperForgetItem.target = self
@@ -75,10 +82,15 @@ final class MenuBarController {
 
     /// Галочка — «связь с Flipper'ом включена», а не «Flipper подключён»:
     /// подключение описывает строка ниже.
+    func setFlipperCallOnly(_ enabled: Bool) {
+        flipperCallOnlyItem.state = enabled ? .on : .off
+    }
+
     func render(flipper status: FlipperLink.Status) {
         flipperItem.state = status == .disabled ? .off : .on
         flipperStatusItem.isHidden = status == .disabled
         flipperForgetItem.isHidden = status == .disabled
+        flipperCallOnlyItem.isHidden = status == .disabled
 
         // Без доступа к Bluetooth строка становится кнопкой: открывает нужную панель.
         let needsSettings = status == .unauthorized
@@ -91,6 +103,7 @@ final class MenuBarController {
         case .bluetoothOff: flipperStatusItem.title = "Flipper: Bluetooth выключен"
         case .unauthorized: flipperStatusItem.title = "Flipper: нет доступа к Bluetooth — открыть настройки…"
         case .unsupported: flipperStatusItem.title = "Flipper: на этом Mac нет Bluetooth"
+        case .waitingForCall: flipperStatusItem.title = "Flipper: подключусь, когда начнётся звонок"
         case .searching: flipperStatusItem.title = "Flipper: ищу — запустите на нём Sordio Remote"
         case .connecting: flipperStatusItem.title = "Flipper: подключаюсь…"
         case .connected: flipperStatusItem.title = "Flipper: подключён"
@@ -121,6 +134,7 @@ final class MenuBarController {
 
     @objc private func toggleOverlay() { onToggleOverlay?() }
     @objc private func toggleFlipper() { onToggleFlipper?() }
+    @objc private func toggleFlipperCallOnly() { onToggleFlipperCallOnly?() }
     @objc private func forgetFlipper() { onForgetFlipper?() }
     @objc private func openBluetoothSettings() { onOpenBluetoothSettings?() }
     @objc private func openPermissions() { onOpenPermissions?() }

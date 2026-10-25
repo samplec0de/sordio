@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Идёт нажатие, пришедшее именно с Flipper'а: только его обрыв связи
     /// должен прерывать удержание, а не, скажем, хоткей, зажатый параллельно.
     private var flipperPressing = false
+    private var flipperGate = FlipperGate()
     private var menuBar: MenuBarController!
     private var overlay: OverlayPanel!
     private var timer: Timer?
@@ -68,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             self?.store.tick(now: Date.timeIntervalSinceReferenceDate)
+            self?.updateFlipperActivity()
         }
     }
 
@@ -274,13 +276,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Preferences.shared.flipperEnabled = enabled
             if enabled { self.flipper.start() } else { self.flipper.stop() }
         }
+        menuBar.setFlipperCallOnly(Preferences.shared.flipperOnlyDuringCalls)
+        menuBar.onToggleFlipperCallOnly = { [weak self] in
+            guard let self else { return }
+            let enabled = !Preferences.shared.flipperOnlyDuringCalls
+            Preferences.shared.flipperOnlyDuringCalls = enabled
+            self.menuBar.setFlipperCallOnly(enabled)
+            self.updateFlipperActivity()
+        }
         menuBar.onForgetFlipper = { [weak self] in
             Preferences.shared.flipperIdentifier = nil
             self?.flipper.forget()
         }
         menuBar.onOpenBluetoothSettings = { FlipperLink.openBluetoothSettings() }
 
+        updateFlipperActivity()
         if Preferences.shared.flipperEnabled { flipper.start() }
+    }
+
+    /// В режиме «только во время звонка» Flipper занят, пока идёт звонок, и
+    /// свободен для другого компьютера, пока нет.
+    private func updateFlipperActivity() {
+        let inCall = store.overlay == .muted || store.overlay == .unmuted
+        flipper.setActive(flipperGate.wantsConnection(
+            onlyDuringCalls: Preferences.shared.flipperOnlyDuringCalls,
+            inCall: inCall,
+            now: Date.timeIntervalSinceReferenceDate))
     }
 
     // MARK: - хоткей
